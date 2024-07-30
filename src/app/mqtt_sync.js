@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';  // for unique ID
 
 const uniqueId = "unique";//uuidv4(); // constant ID for client.
 const MQTT_SERVER_URL = "wss://sora2.uclab.jp/mqws"
-var mqttclient = null;
+export var mqttclient = null;
 
 export const connectMQTT = (connectCallback) => {
     if (mqttclient == null) {

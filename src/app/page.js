@@ -2,7 +2,7 @@
 import * as React from 'react'
 import Controller from './controller.js'
 
-import { connectMQTT, subscribe } from './mqtt_sync.js'
+import { mqttclient, connectMQTT, subscribe } from './mqtt_sync.js'
 
 export default function Home() {
   const [rendered, set_rendered] = React.useState(false)
@@ -21,6 +21,8 @@ export default function Home() {
   const [box_visible, set_box_visible] = React.useState(true)
   const [wrist_rotate, set_wrist_rotate] = React.useState({ x: 0, y: 0, z: 0 })
   const [fabrik_mode, set_fabrik_mode] = React.useState(false)
+
+  const use_mqtt = React.useRef(false);
   let registered = false
 
   const joint_pos = {
@@ -224,10 +226,10 @@ export default function Home() {
   }, [])
 
   React.useEffect(() => {
-    if (nodes.length > 0 && fabrik_mode) {
-      FABRIK(source, target, nodes)
-    }
-    if (nodes.length > 0 && !fabrik_mode) {
+    //    if (nodes.length > 0 && fabrik_mode) {
+    //      FABRIK(source, target, nodes)
+    //    }
+    if (nodes.length > 0) {
       WRIST_IK(source, target, nodes)
     }
   }, [target, wrist_rotate])
@@ -330,7 +332,7 @@ export default function Home() {
 
       set_rotate({ ...wkrotate })
     }
-  }, [nodes, wrist_rotate, fabrik_mode])
+  }, [nodes, wrist_rotate])
 
   const robotChange = () => {
     const get = (robotName) => {
@@ -345,15 +347,39 @@ export default function Home() {
 
   const setKinovaJoints = (payload) => {
     //    console.log("Payload", payload)
-    set_rotate({
-      j1: 180 - payload[0],
-      j2: payload[1] - 180,
-      j3: 180 - payload[2],
-      j4: 180 - payload[3],
-      j5: 180 - payload[4],
-      j6: -payload[5]
-    })
+    set_fabrik_mode((current) => { use_mqtt.current = current; return current });
+    //    console.log("FMode", use_mqtt.current);
+    if (!use_mqtt.current) {
+      set_rotate({
+        j1: 180 - payload[0],
+        j2: payload[1] - 180,
+        j3: 180 - payload[2],
+        j4: 180 - payload[3],
+        j5: 180 - payload[4],
+        j6: -payload[5]
+      })
+    }
   }
+
+  React.useEffect(() => {
+    if (mqttclient != null && use_mqtt.current) {
+      const msg = JSON.stringify(
+        {
+          grip: false,
+          toggle: false,
+          pos: target,
+          ori: { x: 0, y: 0, z: 0 },
+          rotate: rotate,
+        }
+      );
+      mqttclient.publish('kinova/state', msg);
+      console.log("Send", msg)
+    } else {
+      //      console.log("MQTT ", mqttclient);
+    }
+  }, [rotate])
+
+
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -399,8 +425,10 @@ export default function Home() {
   if (rendered) {
     return (
       <>
-        <a-scene>
-          <a-sky color="#E2F4FF"></a-sky>
+        <a-scene xr-mode-ui="enterAREnabled: true; XRMode: xr">
+          {
+            //<a-sky color="#E2F4FF"></a-sky>
+          }
           <Abox {...aboxprops} />
           <a-cone position={edit_pos(node1)} scale={box_scale} color="red" visible={box_visible}></a-cone>
           <a-cone position={edit_pos(node2)} scale={box_scale} color="cyan" visible={box_visible}></a-cone>
