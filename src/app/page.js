@@ -2,7 +2,8 @@
 import * as React from 'react'
 import Controller from './controller.js'
 
-import { connectMQTT, subscribe } from './mqtt_sync.js'
+import { mqttclient, connectMQTT, subscribe } from './mqtt_sync.js'
+//import { AFRAME } from 'aframe';
 
 export default function Home() {
   const [rendered, set_rendered] = React.useState(false)
@@ -21,10 +22,12 @@ export default function Home() {
   const [box_visible, set_box_visible] = React.useState(true)
   const [wrist_rotate, set_wrist_rotate] = React.useState({ x: 0, y: 0, z: 0 })
   const [fabrik_mode, set_fabrik_mode] = React.useState(false)
+
+  const use_mqtt = React.useRef(false);
   let registered = false
 
   const joint_pos = {
-    base: { x: 0, y: 0, z: 0 }, j1: { x: 0, y: 0, z: 0 },
+    base: { x: 0, y: 0.5, z: 0 }, j1: { x: 0, y: 0, z: 0 },
     j2: { x: 0, y: 0.2755, z: 0 }, j3: { x: 0, y: 0.41, z: 0 }, j4: { x: 0.00974, y: 0.2075, z: 0 },
     j5: { x: 0.00026, y: 0.1035, z: 0 }, j6: { x: -0.00025, y: 0.104, z: 0 },
     j7: { x: 0, y: 0.1145, z: 0 }, j8: { x: 0, y: 0.05, z: 0 }
@@ -224,10 +227,10 @@ export default function Home() {
   }, [])
 
   React.useEffect(() => {
-    if (nodes.length > 0 && fabrik_mode) {
-      FABRIK(source, target, nodes)
-    }
-    if (nodes.length > 0 && !fabrik_mode) {
+    //    if (nodes.length > 0 && fabrik_mode) {
+    //      FABRIK(source, target, nodes)
+    //    }
+    if (nodes.length > 0) {
       WRIST_IK(source, target, nodes)
     }
   }, [target, wrist_rotate])
@@ -330,7 +333,7 @@ export default function Home() {
 
       set_rotate({ ...wkrotate })
     }
-  }, [nodes, wrist_rotate, fabrik_mode])
+  }, [nodes, wrist_rotate])
 
   const robotChange = () => {
     const get = (robotName) => {
@@ -344,25 +347,49 @@ export default function Home() {
   }
 
   const setKinovaJoints = (payload) => {
-    //    console.log("Payload", payload)
-    set_rotate({
-      j1: 180 - payload[0],
-      j2: payload[1] - 180,
-      j3: 180 - payload[2],
-      j4: 180 - payload[3],
-      j5: 180 - payload[4],
-      j6: -payload[5]
-    })
+    console.log("Payload", payload)
+    set_fabrik_mode((current) => { use_mqtt.current = current; return current });
+    //    console.log("FMode", use_mqtt.current);
+    if (!use_mqtt.current) {
+      set_rotate({
+        j1: 180 - payload[0],
+        j2: payload[1] - 180,
+        j3: 180 - payload[2],
+        j4: 180 - payload[3],
+        j5: 180 - payload[4],
+        j6: -payload[5]
+      })
+    }
   }
+
+  React.useEffect(() => {
+    if (mqttclient != null && use_mqtt.current) {
+      const msg = JSON.stringify(
+        {
+          grip: false,
+          toggle: false,
+          pos: target,
+          ori: { x: 0, y: 0, z: 0 },
+          rotate: rotate,
+        }
+      );
+      // 毎回送るのはよくないと思うけどな。。。
+      mqttclient.publish('kinova/state', msg);
+      console.log("Send", msg)
+    } else {
+      //      console.log("MQTT ", mqttclient);
+    }
+  }, [rotate])
+
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       require("aframe");
-      setTimeout(set_rendered(true), 1000)
+      setTimeout(set_rendered, 1000, true)
       console.log('set_rendered')
 
       if (!registered) {
-        registered = true
+        registered = true;
         AFRAME.registerComponent('robot-click', {
           init: function () {
             this.el.addEventListener('click', (evt) => {
@@ -372,8 +399,57 @@ export default function Home() {
           }
         });
 
+        AFRAME.registerComponent('vr-mode-detector', {
+          init: function () {
+            var el = this.el;
+            el.sceneEl.addEventListener('enter-vr', function () {
+              console.log('VRモードが開始されました');
+              //              set_controller();
+            });
+            el.sceneEl.addEventListener('exit-vr', function () {
+              console.log('VRモードが終了しました');
+              // VRモード終了時の関数を呼び出す
+            });
+          }
+        });
+
+        AFRAME.registerComponent('vr-ctrl-listener', {
+          init: function () {
+            const txt = document.getElementById("txt");
+            const txt2 = document.getElementById("txt2");
+            //            this.el.txt = 
+            //            this.el.txt2 = 
+            console.log("listener regist!", txt, txt2)
+
+            this.el.addEventListener('gripdown', function (event) {
+              console.log("value", "Right grip down");
+              txt.setAttribute("value", "Right grip down");
+            });
+            ctlR.addEventListener('gripup', function (event) {
+              console.log("value", "Right grip up");
+              txt.setAttribute("value", "Right grip up");
+            });
+
+          },
+          tick: function () {
+            //            console.log("Controller tick!", this.el.object3D);
+            const txt2 = document.getElementById("txt2");
+            const txt3 = document.getElementById("txt3");
+            var p = this.el.object3D.position;
+            var q = this.el.object3D.quaternion;
+            txt2.setAttribute("value", "R-Pos: " + p.x.toFixed(2) + ", " + p.y.toFixed(2) + ", " + p.z.toFixed(2));
+
+            //
+            set_target({ x: p.x, y: p.y, z: p.z });
+
+            txt3.setAttribute("value", "Q: " + q.x.toFixed(2) + ", " + q.y.toFixed(2) + ", " + q.z.toFixed(2) + ", " + q.w.toFixed(2));
+
+          }
+        });
+
         console.log("Connecting MQTT");
-        connectMQTT(() => subscribe("kinova/real", setKinovaJoints));
+        //        connectMQTT(() => subscribe("kinova/real", setKinovaJoints));
+        connectMQTT(() => (0));
 
       }
     }
@@ -399,16 +475,24 @@ export default function Home() {
   if (rendered) {
     return (
       <>
-        <a-scene>
-          <a-sky color="#E2F4FF"></a-sky>
+        <a-scene vr-mode-detector xr-mode-ui="enterAREnabled: true; XRMode: xr" >
+          {
+            //<a-sky color="#E2F4FF"></a-sky>
+          }
           <Abox {...aboxprops} />
           <a-cone position={edit_pos(node1)} scale={box_scale} color="red" visible={box_visible}></a-cone>
           <a-cone position={edit_pos(node2)} scale={box_scale} color="cyan" visible={box_visible}></a-cone>
           <a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#7BC8A4" shadow></a-plane>
+          <a-entity id="ctlR" laser-controls="hand: right" raycaster="showLine: true" vr-ctrl-listener="hand: right"></a-entity>
+
           <Assets />
           <Select_Robot {...robotProps} />
           <a-entity id="rig" position={edit_pos(c_pos)} rotation={`${c_deg.x} ${c_deg.y} ${c_deg.z}`}>
-            <a-camera id="camera" cursor="rayOrigin: mouse;" position="0 0 0"></a-camera>
+            <a-entity id="camera" camera cursor="rayOrigin: mouse;" look-controls position="0 -0.3 0">
+              <a-text id="txt" value="text" position="0.3 0 -1" scale="0.4 0.4 0.4" align="center" color="#800000"></a-text>
+              <a-text id="txt2" value="0,0,0" position="0.3 -0.15 -1" scale="0.4 0.4 0.4" align="center" color="#805000"></a-text>
+              <a-text id="txt3" value="0,0,0" position="0.3 -0.30 -1" scale="0.4 0.4 0.4" align="center" color="#805000"></a-text>
+            </a-entity>
           </a-entity>
           <a-sphere position={edit_pos(target)} scale="0.02 0.02 0.02" color="yellow" visible={true}></a-sphere>
         </a-scene>
