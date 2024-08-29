@@ -3,6 +3,7 @@ import * as React from 'react'
 import Controller from './controller.js'
 
 import { mqttclient, connectMQTT, subscribe } from './mqtt_sync.js'
+//import { AFRAME } from 'aframe';
 
 export default function Home() {
   const [rendered, set_rendered] = React.useState(false)
@@ -26,7 +27,7 @@ export default function Home() {
   let registered = false
 
   const joint_pos = {
-    base: { x: 0, y: 0, z: 0 }, j1: { x: 0, y: 0, z: 0 },
+    base: { x: 0, y: 1.2, z: 0 }, j1: { x: 0, y: 0, z: 0 },
     j2: { x: 0, y: 0.2755, z: 0 }, j3: { x: 0, y: 0.41, z: 0 }, j4: { x: 0.00974, y: 0.2075, z: 0 },
     j5: { x: 0.00026, y: 0.1035, z: 0 }, j6: { x: -0.00025, y: 0.104, z: 0 },
     j7: { x: 0, y: 0.1145, z: 0 }, j8: { x: 0, y: 0.05, z: 0 }
@@ -346,7 +347,7 @@ export default function Home() {
   }
 
   const setKinovaJoints = (payload) => {
-    //    console.log("Payload", payload)
+    console.log("Payload", payload)
     set_fabrik_mode((current) => { use_mqtt.current = current; return current });
     //    console.log("FMode", use_mqtt.current);
     if (!use_mqtt.current) {
@@ -372,6 +373,7 @@ export default function Home() {
           rotate: rotate,
         }
       );
+      // 毎回送るのはよくないと思うけどな。。。
       mqttclient.publish('kinova/state', msg);
       console.log("Send", msg)
     } else {
@@ -379,16 +381,37 @@ export default function Home() {
     }
   }, [rotate])
 
+  const set_controller = () => {
+    const ctlR = document.getElementById("ctlR");
+    const txt = document.getElementById("txt");
+    const txt2 = document.getElementById("txt2");
+    if (ctlR != undefined) {
+      console.log("ctlR found! set events", ctlR);
+      //      console.log("ctlR position", ctlR.object3D.position);
+      ctlR.addEventListener('gripdown', function (event) {
+        console.log("value", "Right gripdown down");
+        txt.setAttribute("value", "Right gripdown down");
+      });
+      ctlR.addEventListener('gripup', function (event) {
+        console.log("value", "Right gripdown up");
+        txt.setAttribute("value", "Right gripdown up");
+      });
+
+    } else {
+      console.log("Can't find ctlr")
+
+    }
+  }
 
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       require("aframe");
-      setTimeout(set_rendered(true), 1000)
+      setTimeout(set_rendered, 1000, true)
       console.log('set_rendered')
 
       if (!registered) {
-        registered = true
+        registered = true;
         AFRAME.registerComponent('robot-click', {
           init: function () {
             this.el.addEventListener('click', (evt) => {
@@ -398,8 +421,47 @@ export default function Home() {
           }
         });
 
+        AFRAME.registerComponent('vr-mode-detector', {
+          init: function () {
+            var el = this.el;
+            el.sceneEl.addEventListener('enter-vr', function () {
+              console.log('VRモードが開始されました');
+              set_controller();
+            });
+            el.sceneEl.addEventListener('exit-vr', function () {
+              console.log('VRモードが終了しました');
+              // VRモード終了時の関数を呼び出す
+            });
+          }
+        });
+
+        AFRAME.registerComponent('vr-ctrl-listener', {
+          init: function () {
+            this.el.txt = document.getElementById("txt");
+            this.el.txt2 = document.getElementById("txt2");
+
+            this.el.addEventListener('gripdown', function (event) {
+              console.log("value", "Right gripdown down");
+              this.el.txt.setAttribute("value", "Right gripdown down");
+            });
+            ctlR.addEventListener('gripup', function (event) {
+              console.log("value", "Right gripdown up");
+              this.el.txt.setAttribute("value", "Right gripdown up");
+            });
+
+          },
+          tick: function () {
+            if (this.data.hand == "right") {
+              var p = this.el.object3D.position;
+              this.el.txt2.setAttribute("value", "R-Position: " + p.x.toFixed(2) + ", " + p.y.toFixed(2) + ", " + p.z.toFixed(2));
+            }
+          }
+
+        });
+
         console.log("Connecting MQTT");
-        connectMQTT(() => subscribe("kinova/real", setKinovaJoints));
+        //        connectMQTT(() => subscribe("kinova/real", setKinovaJoints));
+        connectMQTT(() => (0));
 
       }
     }
@@ -425,18 +487,22 @@ export default function Home() {
   if (rendered) {
     return (
       <>
-        <a-scene xr-mode-ui="enterAREnabled: true; XRMode: xr">
+        <a-scene xr-mode-ui="enterAREnabled: true; XRMode: xr" vr-mode-detector>
           {
             //<a-sky color="#E2F4FF"></a-sky>
+            //<a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#7BC8A4" shadow></a-plane>
           }
           <Abox {...aboxprops} />
           <a-cone position={edit_pos(node1)} scale={box_scale} color="red" visible={box_visible}></a-cone>
           <a-cone position={edit_pos(node2)} scale={box_scale} color="cyan" visible={box_visible}></a-cone>
-          <a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#7BC8A4" shadow></a-plane>
           <Assets />
+          <a-enetiy id="ctlR" laser-controls="hand: right" vr-ctrl-listener="hand: right"></a-enetiy>
           <Select_Robot {...robotProps} />
           <a-entity id="rig" position={edit_pos(c_pos)} rotation={`${c_deg.x} ${c_deg.y} ${c_deg.z}`}>
-            <a-camera id="camera" cursor="rayOrigin: mouse;" position="0 0 0"></a-camera>
+            <a-entity id="camera" camera cursor="rayOrigin: mouse;" look-controls position="0 0 0">
+              <a-text id="txt" value="text" position="0.5 0 -1" scale="0.4 0.4 0.4" align="center" color="#000000"></a-text>
+              <a-text id="txt2" value="0,0,0" position="0.5 -0.15 -1" scale="0.4 0.4 0.4" align="center" color="#000000"></a-text>
+            </a-entity>
           </a-entity>
           <a-sphere position={edit_pos(target)} scale="0.02 0.02 0.02" color="yellow" visible={true}></a-sphere>
         </a-scene>
