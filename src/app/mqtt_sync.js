@@ -47,12 +47,14 @@ export const connectMQTT = (connectCallback) => {
 }
 
 export const subscribe = (topic, callback) => {
+    console.log("SubScribe topic!", topic, callback)
     if (mqttclient != null) {
         mqttclient.subscribe(topic, { qos: 0 }, function (error, granted) {
             if (error) {
                 console.log("subscribe error on", topic)
             } else {
-                console.log(`Granted ${granted[0].topic}`)
+                console.log(`Granted ${granted}`)
+                //    console.log(`Granted ${granted[0].topic}`)
                 mqttclient.on("message", (tpc, payload, packet) => {
                     if (topic == tpc) {
                         callback(JSON.parse(payload.toString()))
