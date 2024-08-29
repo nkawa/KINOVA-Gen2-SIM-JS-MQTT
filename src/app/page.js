@@ -27,7 +27,7 @@ export default function Home() {
   let registered = false
 
   const joint_pos = {
-    base: { x: 0, y: 1.2, z: 0 }, j1: { x: 0, y: 0, z: 0 },
+    base: { x: 0, y: 0.5, z: 0 }, j1: { x: 0, y: 0, z: 0 },
     j2: { x: 0, y: 0.2755, z: 0 }, j3: { x: 0, y: 0.41, z: 0 }, j4: { x: 0.00974, y: 0.2075, z: 0 },
     j5: { x: 0.00026, y: 0.1035, z: 0 }, j6: { x: -0.00025, y: 0.104, z: 0 },
     j7: { x: 0, y: 0.1145, z: 0 }, j8: { x: 0, y: 0.05, z: 0 }
@@ -381,28 +381,6 @@ export default function Home() {
     }
   }, [rotate])
 
-  const set_controller = () => {
-    const ctlR = document.getElementById("ctlR");
-    const txt = document.getElementById("txt");
-    const txt2 = document.getElementById("txt2");
-    if (ctlR != undefined) {
-      console.log("ctlR found! set events", ctlR);
-      //      console.log("ctlR position", ctlR.object3D.position);
-      ctlR.addEventListener('gripdown', function (event) {
-        console.log("value", "Right gripdown down");
-        txt.setAttribute("value", "Right gripdown down");
-      });
-      ctlR.addEventListener('gripup', function (event) {
-        console.log("value", "Right gripdown up");
-        txt.setAttribute("value", "Right gripdown up");
-      });
-
-    } else {
-      console.log("Can't find ctlr")
-
-    }
-  }
-
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -426,7 +404,7 @@ export default function Home() {
             var el = this.el;
             el.sceneEl.addEventListener('enter-vr', function () {
               console.log('VRモードが開始されました');
-              set_controller();
+              //              set_controller();
             });
             el.sceneEl.addEventListener('exit-vr', function () {
               console.log('VRモードが終了しました');
@@ -437,26 +415,36 @@ export default function Home() {
 
         AFRAME.registerComponent('vr-ctrl-listener', {
           init: function () {
-            this.el.txt = document.getElementById("txt");
-            this.el.txt2 = document.getElementById("txt2");
+            const txt = document.getElementById("txt");
+            const txt2 = document.getElementById("txt2");
+            //            this.el.txt = 
+            //            this.el.txt2 = 
+            console.log("listener regist!", txt, txt2)
 
             this.el.addEventListener('gripdown', function (event) {
-              console.log("value", "Right gripdown down");
-              this.el.txt.setAttribute("value", "Right gripdown down");
+              console.log("value", "Right grip down");
+              txt.setAttribute("value", "Right grip down");
             });
             ctlR.addEventListener('gripup', function (event) {
-              console.log("value", "Right gripdown up");
-              this.el.txt.setAttribute("value", "Right gripdown up");
+              console.log("value", "Right grip up");
+              txt.setAttribute("value", "Right grip up");
             });
 
           },
           tick: function () {
-            if (this.data.hand == "right") {
-              var p = this.el.object3D.position;
-              this.el.txt2.setAttribute("value", "R-Position: " + p.x.toFixed(2) + ", " + p.y.toFixed(2) + ", " + p.z.toFixed(2));
-            }
-          }
+            //            console.log("Controller tick!", this.el.object3D);
+            const txt2 = document.getElementById("txt2");
+            const txt3 = document.getElementById("txt3");
+            var p = this.el.object3D.position;
+            var q = this.el.object3D.quaternion;
+            txt2.setAttribute("value", "R-Pos: " + p.x.toFixed(2) + ", " + p.y.toFixed(2) + ", " + p.z.toFixed(2));
 
+            //
+            set_target({ x: p.x, y: p.y, z: p.z });
+
+            txt3.setAttribute("value", "Q: " + q.x.toFixed(2) + ", " + q.y.toFixed(2) + ", " + q.z.toFixed(2) + ", " + q.w.toFixed(2));
+
+          }
         });
 
         console.log("Connecting MQTT");
@@ -487,21 +475,23 @@ export default function Home() {
   if (rendered) {
     return (
       <>
-        <a-scene xr-mode-ui="enterAREnabled: true; XRMode: xr" vr-mode-detector>
+        <a-scene vr-mode-detector xr-mode-ui="enterAREnabled: true; XRMode: xr" >
           {
             //<a-sky color="#E2F4FF"></a-sky>
-            //<a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#7BC8A4" shadow></a-plane>
           }
           <Abox {...aboxprops} />
           <a-cone position={edit_pos(node1)} scale={box_scale} color="red" visible={box_visible}></a-cone>
           <a-cone position={edit_pos(node2)} scale={box_scale} color="cyan" visible={box_visible}></a-cone>
+          <a-plane position="0 0 0" rotation="-90 0 0" width="1" height="1" color="#7BC8A4" shadow></a-plane>
+          <a-entity id="ctlR" laser-controls="hand: right" raycaster="showLine: true" vr-ctrl-listener="hand: right"></a-entity>
+
           <Assets />
-          <a-enetiy id="ctlR" laser-controls="hand: right" vr-ctrl-listener="hand: right"></a-enetiy>
           <Select_Robot {...robotProps} />
           <a-entity id="rig" position={edit_pos(c_pos)} rotation={`${c_deg.x} ${c_deg.y} ${c_deg.z}`}>
-            <a-entity id="camera" camera cursor="rayOrigin: mouse;" look-controls position="0 0 0">
-              <a-text id="txt" value="text" position="0.5 0 -1" scale="0.4 0.4 0.4" align="center" color="#000000"></a-text>
-              <a-text id="txt2" value="0,0,0" position="0.5 -0.15 -1" scale="0.4 0.4 0.4" align="center" color="#000000"></a-text>
+            <a-entity id="camera" camera cursor="rayOrigin: mouse;" look-controls position="0 -0.3 0">
+              <a-text id="txt" value="text" position="0.3 0 -1" scale="0.4 0.4 0.4" align="center" color="#800000"></a-text>
+              <a-text id="txt2" value="0,0,0" position="0.3 -0.15 -1" scale="0.4 0.4 0.4" align="center" color="#805000"></a-text>
+              <a-text id="txt3" value="0,0,0" position="0.3 -0.30 -1" scale="0.4 0.4 0.4" align="center" color="#805000"></a-text>
             </a-entity>
           </a-entity>
           <a-sphere position={edit_pos(target)} scale="0.02 0.02 0.02" color="yellow" visible={true}></a-sphere>
